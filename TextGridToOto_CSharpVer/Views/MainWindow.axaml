@@ -11,6 +11,7 @@
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="*"/>
+                <RowDefinition Height="150"/>
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
@@ -65,7 +66,30 @@
                 </StackPanel>
             </StackPanel>
             
-            <StackPanel Grid.Row="1" Grid.ColumnSpan="2" 
+            <!-- 日志输出区域 -->
+            <Border Grid.Row="1" Grid.ColumnSpan="2" 
+                    Margin="20,10,20,10" 
+                    BorderBrush="Gray" 
+                    BorderThickness="1" 
+                    CornerRadius="5">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" 
+                              HorizontalScrollBarVisibility="Auto">
+                    <TextBox Name="LogTextBox"
+                             Text="{Binding LogText}"
+                             AcceptsReturn="True" 
+                             TextWrapping="Wrap" 
+                             IsReadOnly="True"
+                             Focusable="False"
+                             Cursor="Arrow"
+                             Background="#F5F5F5"
+                             FontFamily="Consolas"
+                             FontSize="12"
+                             Watermark="日志输出区域..."/>
+                </ScrollViewer>
+            </Border>
+            
+            <!-- 底部按钮区域 -->
+            <StackPanel Grid.Row="2" Grid.ColumnSpan="2" 
                         Orientation="Horizontal" 
                         HorizontalAlignment="Center" 
                         Margin="0,0,0,10" 
