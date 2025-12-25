@@ -6,6 +6,7 @@ using System.Text;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using TextGrid2Oto;
 using TextGridToOto_CSharpVer.Infer;
 
 namespace TextGridToOto_CSharpVer.ViewModels
@@ -215,6 +216,401 @@ namespace TextGridToOto_CSharpVer.ViewModels
                 ResetProgress();
                 LogError($"执行 FA 时出错: {ex.Message}");
             }
+        }
+
+        [RelayCommand]
+        private async System.Threading.Tasks.Task RunConversion()
+        {
+            try
+            {
+                Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+
+                if (string.IsNullOrEmpty(WavFolderPath))
+                {
+                    LogError("请先选择 Wav 文件夹");
+                    return;
+                }
+
+                if (!Directory.Exists(WavFolderPath))
+                {
+                    LogError($"Wav 文件夹不存在: {WavFolderPath}");
+                    return;
+                }
+
+                if (string.IsNullOrEmpty(PresampFilePath))
+                {
+                    LogError("请先选择 Presamp 文件");
+                    return;
+                }
+
+                if (!File.Exists(PresampFilePath))
+                {
+                    LogError($"Presamp 文件不存在: {PresampFilePath}");
+                    return;
+                }
+
+                if (string.IsNullOrEmpty(ConfigFilePath))
+                {
+                    LogError("请先选择 Config 文件");
+                    return;
+                }
+
+                if (!File.Exists(ConfigFilePath))
+                {
+                    LogError($"Config 文件不存在: {ConfigFilePath}");
+                    return;
+                }
+
+                var mode = SelectedTypeIndex switch
+                {
+                    0 => OtoMode.Cvv,
+                    1 => OtoMode.Cvvc,
+                    2 => OtoMode.Vcv,
+                    _ => OtoMode.Cvvc
+                };
+
+                var conversionConfig = LoadConversionConfig(ConfigFilePath, PresampFilePath, mode);
+
+                var isMultiScale = SelectedMultipleScalesIndex == 1;
+
+                if (!isMultiScale)
+                {
+                    var pitch = string.IsNullOrWhiteSpace(Suffix) ? conversionConfig.Pitch : Suffix.Trim();
+
+                    SetIndeterminateProgress("转换中...");
+                    Log("开始执行 TextGrid -> oto 转换...");
+                    Log($"模式: {GetTypeName(SelectedTypeIndex)}");
+                    Log($"多音阶: 关闭");
+                    Log($"Suffix: {pitch}");
+
+                    await System.Threading.Tasks.Task.Run(() =>
+                    {
+                        ConvertOneFolder(WavFolderPath, conversionConfig, pitch);
+                    });
+
+                    ResetProgress();
+                    LogSuccess("转换完成！");
+                    Log($"输出路径: {Path.Combine(WavFolderPath, "oto.ini")}");
+                    return;
+                }
+
+                var allSubDirs = Directory.GetDirectories(WavFolderPath, "*", SearchOption.TopDirectoryOnly)
+                    .OrderBy(p => Path.GetFileName(p), StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                var subDirs = allSubDirs
+                    .Where(p =>
+                    {
+                        var name = Path.GetFileName(p);
+                        if (string.Equals(name, "lab", StringComparison.OrdinalIgnoreCase)) return false;
+                        if (string.Equals(name, "TextGrid", StringComparison.OrdinalIgnoreCase)) return false;
+                        return true;
+                    })
+                    .ToList();
+
+                if (subDirs.Count == 0)
+                {
+                    LogError("多音阶模式已开启，但未找到任何子文件夹");
+                    return;
+                }
+
+                var marks = ParseSuffixMarks(Suffix);
+
+                Log("开始执行 TextGrid -> oto 转换...");
+                Log($"模式: {GetTypeName(SelectedTypeIndex)}");
+                Log($"多音阶: 开启（{subDirs.Count} 个文件夹）");
+                Log($"标识: {(marks.Count == 0 ? "(未设置)" : string.Join(",", marks))}");
+
+                ProgressValue = 0;
+                IsProgressIndeterminate = false;
+                ProgressText = $"Conversion (0/{subDirs.Count})";
+
+                await System.Threading.Tasks.Task.Run(() =>
+                {
+                    for (var i = 0; i < subDirs.Count; i++)
+                    {
+                        var dir = subDirs[i];
+                        var folderName = Path.GetFileName(dir);
+                        var pitch = marks.Count switch
+                        {
+                            0 => folderName,
+                            1 => marks[0],
+                            _ => i < marks.Count ? marks[i] : folderName
+                        };
+
+                        try
+                        {
+                            ConvertOneFolder(dir, conversionConfig, pitch);
+                            var current = i + 1;
+                            PostToUi(() =>
+                            {
+                                UpdateProgress(current, subDirs.Count, "Conversion");
+                                Log($"[{current}/{subDirs.Count}] 完成: {folderName} -> Suffix={pitch}");
+                            });
+                        }
+                        catch (Exception ex)
+                        {
+                            PostToUi(() =>
+                            {
+                                LogError($"转换失败: {folderName} - {ex.Message}");
+                            });
+                        }
+                    }
+                });
+
+                ResetProgress();
+                LogSuccess("多音阶转换完成！");
+            }
+            catch (Exception ex)
+            {
+                ResetProgress();
+                LogError($"执行 Conversion 时出错: {ex.Message}");
+            }
+        }
+
+        private sealed record ConversionConfig(
+            string DsDictPath,
+            string PresampPath,
+            string IgnoreCsv,
+            OtoMode Mode,
+            double[] CvSum,
+            double[] VcSum,
+            double[] VvSum,
+            double[] CvOffset,
+            double[] VcOffset,
+            int CvRepeat,
+            int VcRepeat,
+            string Pitch,
+            string Cover);
+
+        private ConversionConfig LoadConversionConfig(string configPath, string presampPath, OtoMode mode)
+        {
+            var raw = File.ReadAllText(configPath, Encoding.UTF8);
+            var hasEquals = raw.Contains('=', StringComparison.Ordinal);
+
+            string? dsDictPath = null;
+            string? ignore = null;
+            double[]? cvSum = null;
+            double[]? vcSum = null;
+            double[]? vvSum = null;
+            double[]? cvOffset = null;
+            double[]? vcOffset = null;
+            int? cvRepeat = null;
+            int? vcRepeat = null;
+            string? pitch = null;
+            string? cover = null;
+
+            if (hasEquals)
+            {
+                var cfg = IniLikeConfig.Load(configPath);
+                dsDictPath = cfg.Get("ds_dict");
+                ignore = cfg.Get("ignore");
+                cvSum = cfg.GetCsvDoubles("cv_sum");
+                vcSum = cfg.GetCsvDoubles("vc_sum");
+                vvSum = cfg.GetCsvDoubles("vv_sum");
+                cvOffset = cfg.GetCsvDoubles("cv_offset");
+                vcOffset = cfg.GetCsvDoubles("vc_offset");
+                cvRepeat = cfg.GetInt("CV_repeat");
+                vcRepeat = cfg.GetInt("VC_repeat");
+                pitch = cfg.Get("pitch");
+                cover = cfg.Get("cover");
+            }
+            else
+            {
+                var dict = ParseYamlLike(configPath);
+                dsDictPath = GetFirst(dict, "ds_dict", "dsDict", "dsDictPath");
+                var sofa2utau = GetFirst(dict, "sofa2utau");
+                if (string.IsNullOrWhiteSpace(dsDictPath) && !string.IsNullOrWhiteSpace(sofa2utau))
+                {
+                    dsDictPath = Path.IsPathRooted(sofa2utau) ? sofa2utau : Path.Combine(Path.GetDirectoryName(configPath) ?? "", sofa2utau);
+                }
+
+                ignore = GetFirst(dict, "ignore", "Ignore_phonemes", "ignore_phonemes");
+                cvSum = ParseCsvDoubles(GetFirst(dict, "cv_sum"));
+                vcSum = ParseCsvDoubles(GetFirst(dict, "vc_sum"));
+                vvSum = ParseCsvDoubles(GetFirst(dict, "vv_sum"));
+                cvOffset = ParseCsvDoubles(GetFirst(dict, "cv_offset"));
+                vcOffset = ParseCsvDoubles(GetFirst(dict, "vc_offset"));
+                cvRepeat = ParseInt(GetFirst(dict, "CV_repeat", "cv_repeat"));
+                vcRepeat = ParseInt(GetFirst(dict, "VC_repeat", "vc_repeat"));
+                pitch = GetFirst(dict, "pitch");
+                cover = GetFirst(dict, "cover");
+            }
+
+            if (string.IsNullOrWhiteSpace(dsDictPath))
+            {
+                if (Path.GetExtension(configPath).Equals(".txt", StringComparison.OrdinalIgnoreCase))
+                {
+                    dsDictPath = configPath;
+                }
+                else
+                {
+                    var appDir = AppDomain.CurrentDomain.BaseDirectory;
+                    var fallbackDict = Path.Combine(appDir, "dictionary", "zh.txt");
+                    if (File.Exists(fallbackDict))
+                    {
+                        dsDictPath = fallbackDict;
+                    }
+                    else
+                    {
+                        throw new InvalidOperationException("Config 中未找到 ds_dict，且未找到默认字典 dictionary/zh.txt");
+                    }
+                }
+            }
+            else
+            {
+                if (!Path.IsPathRooted(dsDictPath))
+                {
+                    var baseDir = Path.GetDirectoryName(configPath) ?? "";
+                    dsDictPath = Path.Combine(baseDir, dsDictPath);
+                }
+            }
+
+            if (!File.Exists(dsDictPath))
+            {
+                throw new FileNotFoundException($"ds_dict 文件不存在: {dsDictPath}");
+            }
+
+            ignore ??= "AP,SP,EP,R,-,B";
+            cvSum ??= [1, 3, 1.5, 1, 2];
+            vcSum ??= [3, 0, 2, 1, 2];
+            vvSum ??= [3, 3, 1.5, 1, 1.5];
+            cvOffset ??= [0, 0, 0, 0, 0];
+            vcOffset ??= [0, 0, 0, 0, 0];
+            cvRepeat ??= 1;
+            vcRepeat ??= 1;
+            pitch ??= "";
+            cover ??= "N";
+
+            return new ConversionConfig(
+                DsDictPath: dsDictPath,
+                PresampPath: presampPath,
+                IgnoreCsv: ignore,
+                Mode: mode,
+                CvSum: cvSum,
+                VcSum: vcSum,
+                VvSum: vvSum,
+                CvOffset: cvOffset,
+                VcOffset: vcOffset,
+                CvRepeat: cvRepeat.Value,
+                VcRepeat: vcRepeat.Value,
+                Pitch: pitch,
+                Cover: cover);
+        }
+
+        private void ConvertOneFolder(string wavFolder, ConversionConfig config, string pitch)
+        {
+            var textGridDir = Path.Combine(wavFolder, "TextGrid");
+            if (!Directory.Exists(textGridDir))
+            {
+                throw new DirectoryNotFoundException($"TextGrid 文件夹不存在: {textGridDir}");
+            }
+
+            var converter = new TextGrid2OtoConverter(
+                dsDictPath: config.DsDictPath,
+                presampPath: config.PresampPath,
+                ignoreCsv: config.IgnoreCsv,
+                mode: config.Mode,
+                cvSum: config.CvSum,
+                vcSum: config.VcSum,
+                vvSum: config.VvSum
+            );
+
+            var result = converter.ConvertTextGridDirectory(textGridDir);
+
+            var cvRawPath = Path.Combine(wavFolder, "cv_oto.ini");
+            var vcRawPath = Path.Combine(wavFolder, "vc_oto.ini");
+            var finalPath = Path.Combine(wavFolder, "oto.ini");
+
+            OtoWriter.WriteRawOtoLines(cvRawPath, result.CvRawLines, cover: "Y");
+            OtoWriter.WriteRawOtoLines(vcRawPath, result.VcRawLines, cover: "Y");
+
+            var cvEntries = OtoPostProcessor.ParseRawLines(result.CvRawLines);
+            var vcEntries = OtoPostProcessor.ParseRawLines(result.VcRawLines);
+
+            cvEntries = OtoPostProcessor.ApplyRepeat(cvEntries, config.CvRepeat);
+            vcEntries = OtoPostProcessor.ApplyRepeat(vcEntries, config.VcRepeat);
+
+            if (!OtoPostProcessor.IsZeroOffset(config.CvOffset))
+            {
+                cvEntries = OtoPostProcessor.ApplyOffset(cvEntries, config.CvOffset);
+            }
+
+            if (!OtoPostProcessor.IsZeroOffset(config.VcOffset))
+            {
+                vcEntries = OtoPostProcessor.ApplyOffset(vcEntries, config.VcOffset);
+            }
+
+            OtoWriter.WriteFinalOto(finalPath, cvEntries.Concat(vcEntries), pitch, config.Cover);
+        }
+
+        private static List<string> ParseSuffixMarks(string raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw)) return new List<string>();
+            return raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(x => x.Trim())
+                .Where(x => x.Length > 0)
+                .ToList();
+        }
+
+        private static Dictionary<string, string> ParseYamlLike(string path)
+        {
+            var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var rawLine in File.ReadAllLines(path, Encoding.UTF8))
+            {
+                var line = rawLine.Trim();
+                if (line.Length == 0) continue;
+                if (line.StartsWith('#')) continue;
+
+                var idx = line.IndexOf(':');
+                if (idx <= 0) continue;
+
+                var key = line[..idx].Trim();
+                var value = line[(idx + 1)..].Trim();
+
+                var commentIdx = value.IndexOf('#');
+                if (commentIdx >= 0)
+                {
+                    value = value[..commentIdx].Trim();
+                }
+
+                value = value.Trim().Trim('"');
+                if (key.Length == 0) continue;
+                dict[key] = value;
+            }
+            return dict;
+        }
+
+        private static string? GetFirst(Dictionary<string, string> dict, params string[] keys)
+        {
+            foreach (var k in keys)
+            {
+                if (dict.TryGetValue(k, out var v))
+                {
+                    return string.IsNullOrWhiteSpace(v) ? null : v;
+                }
+            }
+            return null;
+        }
+
+        private static double[]? ParseCsvDoubles(string? raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw)) return null;
+            var parts = raw.Trim().Trim('[', ']').Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (parts.Length == 0) return null;
+            var result = new double[parts.Length];
+            for (var i = 0; i < parts.Length; i++)
+            {
+                result[i] = double.Parse(parts[i], System.Globalization.CultureInfo.InvariantCulture);
+            }
+            return result;
+        }
+
+        private static int? ParseInt(string? raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw)) return null;
+            if (int.TryParse(raw.Trim(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var v)) return v;
+            return null;
         }
         
         private readonly StringBuilder _logBuilder = new();

@@ -107,7 +107,7 @@
                         Spacing="40">
                 <Button Width="150" Height="30" FontSize="13" Command="{Binding RunLabCommand}">Run LAB</Button>
                 <Button Width="150" Height="30" FontSize="13" Command="{Binding RunFACommand}">Run FA</Button>
-                <Button Width="150" Height="30" FontSize="13">Run Conversion</Button>
+                <Button Width="150" Height="30" FontSize="13" Command="{Binding RunConversionCommand}">Run Conversion</Button>
                 <Button Width="150" Height="30" FontSize="13">Run</Button>
             </StackPanel>
 

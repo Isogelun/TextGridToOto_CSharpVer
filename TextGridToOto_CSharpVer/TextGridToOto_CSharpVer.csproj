@@ -26,6 +26,18 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <Link>FA_Model\%(RecursiveDir)%(Filename)%(Extension)</Link>
     </None>
+    <None Include="presamp\**\*.*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>presamp\%(RecursiveDir)%(Filename)%(Extension)</Link>
+    </None>
+    <None Include="dictionary\**\*.*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>dictionary\%(RecursiveDir)%(Filename)%(Extension)</Link>
+    </None>
+    <None Include="Config\**\*.*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>Config\%(RecursiveDir)%(Filename)%(Extension)</Link>
+    </None>
   </ItemGroup>
 
   <ItemGroup>
