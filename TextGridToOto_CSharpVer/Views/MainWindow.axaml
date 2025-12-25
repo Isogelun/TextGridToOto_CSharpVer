@@ -13,6 +13,7 @@
                 <RowDefinition Height="*"/>
                 <RowDefinition Height="150"/>
                 <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
@@ -22,14 +23,18 @@
             <StackPanel Margin="20" Grid.Column="0">
                 <TextBlock Margin="0 5">wavPath</TextBlock>
                 <StackPanel Orientation="Horizontal" Spacing="10">
-                    <TextBox Width="300" Watermark="Enter your Path"/>
-                    <Button>Open</Button>
+                    <TextBox Width="300" 
+                             Text="{Binding WavFolderPath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" 
+                             Watermark="Enter your Path"/>
+                    <Button Click="OnSelectWavFolderClick">Open</Button>
                 </StackPanel>
 
                 <TextBlock Margin="0 5">PresampPath</TextBlock>
                 <StackPanel Orientation="Horizontal" Spacing="10">
-				    <TextBox Width="300" Watermark="Enter your Path"/>
-                    <Button>Open</Button>
+				    <TextBox Width="300" 
+				                          Text="{Binding PresampFilePath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" 
+				                          Watermark="Enter your Path"/>
+                    <Button Click="OnSelectPresampFolderClick">Open</Button>
                 </StackPanel>
             </StackPanel>
 
@@ -38,7 +43,8 @@
 
                     <StackPanel>
                         <TextBlock Margin="0 5">Type</TextBlock>
-                        <ComboBox SelectedIndex="0" MaxDropDownHeight="100">
+                        <ComboBox SelectedIndex="{Binding SelectedTypeIndex, Mode=TwoWay}" 
+                                  MaxDropDownHeight="100">
                             <ComboBoxItem>CV</ComboBoxItem>
                             <ComboBoxItem>CVVC</ComboBoxItem>
                             <ComboBoxItem>VCV</ComboBoxItem>
@@ -47,7 +53,8 @@
 
                     <StackPanel>
                         <TextBlock Margin="0 5">Multiple scales</TextBlock>
-                        <ComboBox SelectedIndex="0" MaxDropDownHeight="100">
+                        <ComboBox SelectedIndex="{Binding SelectedMultipleScalesIndex, Mode=TwoWay}" 
+                                  MaxDropDownHeight="100">
                             <ComboBoxItem>Close</ComboBoxItem>
                             <ComboBoxItem>Open</ComboBoxItem>
                         </ComboBox>
@@ -55,14 +62,17 @@
 
                     <StackPanel>
                         <TextBlock Margin="0 5">Suffix</TextBlock>
-                        <TextBox  Watermark="Enter Suffix"/>
+                        <TextBox Text="{Binding Suffix, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" 
+                                 Watermark="Enter Suffix"/>
                     </StackPanel>
                 </StackPanel>
 
                 <TextBlock Margin="0 5">ConfigPath</TextBlock>
                 <StackPanel Orientation="Horizontal" Spacing="10">
-				    <TextBox Width="300" Watermark="Enter your Path"/>
-                    <Button>Open</Button>
+				    <TextBox Width="300" 
+				                          Text="{Binding ConfigFilePath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" 
+				                          Watermark="Enter your Path"/>
+                    <Button Click="OnSelectConfigFolderClick">Open</Button>
                 </StackPanel>
             </StackPanel>
             
@@ -72,7 +82,8 @@
                     BorderBrush="Gray" 
                     BorderThickness="1" 
                     CornerRadius="5">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" 
+                <ScrollViewer x:Name="LogScrollViewer"
+                              VerticalScrollBarVisibility="Auto" 
                               HorizontalScrollBarVisibility="Auto">
                     <TextBox Name="LogTextBox"
                              Text="{Binding LogText}"
@@ -94,11 +105,41 @@
                         HorizontalAlignment="Center" 
                         Margin="0,0,0,10" 
                         Spacing="40">
-                <Button Width="150" Height="30" FontSize="13">Run LAB</Button>
-                <Button Width="150" Height="30" FontSize="13">Run FA</Button>
+                <Button Width="150" Height="30" FontSize="13" Command="{Binding RunLabCommand}">Run LAB</Button>
+                <Button Width="150" Height="30" FontSize="13" Command="{Binding RunFACommand}">Run FA</Button>
                 <Button Width="150" Height="30" FontSize="13">Run Conversion</Button>
                 <Button Width="150" Height="30" FontSize="13">Run</Button>
             </StackPanel>
+
+            <!-- 进度条区域 -->
+            <Border Grid.Row="3" Grid.ColumnSpan="2"
+                    Margin="20,0,20,10"
+                    BorderBrush="Gray"
+                    BorderThickness="1"
+                    CornerRadius="3"
+                    Padding="5">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    
+                    <ProgressBar Grid.Column="0"
+                                 Height="20"
+                                 Minimum="0"
+                                 Maximum="100"
+                                 Value="{Binding ProgressValue}"
+                                 IsIndeterminate="{Binding IsProgressIndeterminate}"
+                                 Margin="0,0,10,0"/>
+                    
+                    <TextBlock Grid.Column="1"
+                               Text="{Binding ProgressText}"
+                               VerticalAlignment="Center"
+                               MinWidth="80"
+                               TextAlignment="Right"
+                               FontSize="12"/>
+                </Grid>
+            </Border>
 
         </Grid>
 

@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0</TargetFramework>
@@ -13,6 +13,19 @@
     <Content Include="TextGrid2oto.ico" />
     <Folder Include="Models\" />
     <Folder Include="TextGrid\" />
+    <Folder Include="FA_Models\" />
+  </ItemGroup>
+
+  <!-- 复制 FA_Models 文件夹到输出目录 -->
+  <ItemGroup>
+    <None Include="FA_Models\**\*.*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>FA_Models\%(RecursiveDir)%(Filename)%(Extension)</Link>
+    </None>
+    <None Include="FA_Model\**\*.*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>FA_Model\%(RecursiveDir)%(Filename)%(Extension)</Link>
+    </None>
   </ItemGroup>
 
   <ItemGroup>
@@ -26,7 +39,8 @@
       <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
     </PackageReference>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.1" />
-    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.23.2" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.20.0" />
+    <PackageReference Include="NAudio" Version="2.2.1" />
     <PackageReference Include="System.Text.Json" Version="10.0.1" />
   </ItemGroup>
 </Project>
