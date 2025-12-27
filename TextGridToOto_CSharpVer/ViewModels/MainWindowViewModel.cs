@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -13,6 +14,11 @@ namespace TextGridToOto_CSharpVer.ViewModels
 {
     public partial class MainWindowViewModel : ViewModelBase
     {
+        public MainWindowViewModel()
+        {
+            LoadAvailableLanguages();
+        }
+
         [ObservableProperty]
         private string _wavFolderPath = string.Empty;
         
@@ -27,6 +33,12 @@ namespace TextGridToOto_CSharpVer.ViewModels
 
         [ObservableProperty]
         private int _selectedMultipleScalesIndex = 0;  // Close=0, Open=1
+
+        [ObservableProperty]
+        private int _selectedLanguageIndex = 0;  // 选中的语言索引
+
+        [ObservableProperty]
+        private List<string> _availableLanguages = new();  // 可用的语言列表
 
         [ObservableProperty]
         private string _suffix = string.Empty;
@@ -184,6 +196,14 @@ namespace TextGridToOto_CSharpVer.ViewModels
                     return;
                 }
 
+                // 获取选中的语言
+                string selectedLanguage = "zh"; // 默认值
+                if (AvailableLanguages.Count > 0 && SelectedLanguageIndex >= 0 && SelectedLanguageIndex < AvailableLanguages.Count)
+                {
+                    selectedLanguage = AvailableLanguages[SelectedLanguageIndex];
+                }
+                Log($"使用语言: {selectedLanguage}");
+
                 SetIndeterminateProgress("推理中...");
                 await System.Threading.Tasks.Task.Run(() =>
                 {
@@ -191,7 +211,7 @@ namespace TextGridToOto_CSharpVer.ViewModels
                         wavFolder: WavFolderPath,
                         labFolder: labFolder,
                         modelFolder: faModelsPath,
-                        language: "zh",
+                        language: selectedLanguage,
                         g2p: "dictionary",
                         dictionaryPath: null,
                         nonLexicalPhonemes: "AP,EP",
@@ -730,6 +750,69 @@ namespace TextGridToOto_CSharpVer.ViewModels
                 2 => "VCV",
                 _ => "未知"
             };
+        }
+
+        /// <summary>
+        /// 加载可用的语言列表（从FA模型的vocab.json中读取）
+        /// </summary>
+        private void LoadAvailableLanguages()
+        {
+            try
+            {
+                string appDir = AppDomain.CurrentDomain.BaseDirectory;
+                string faModelsPath = Path.Combine(appDir, "FA_Model");
+                if (!Directory.Exists(faModelsPath))
+                {
+                    faModelsPath = Path.Combine(appDir, "FA_Models");
+                }
+
+                if (!Directory.Exists(faModelsPath))
+                {
+                    // 如果FA模型文件夹不存在，使用默认语言列表
+                    AvailableLanguages = new List<string> { "zh", "ja", "en" };
+                    SelectedLanguageIndex = 0;
+                    return;
+                }
+
+                string vocabPath = Path.Combine(faModelsPath, "vocab.json");
+                if (!File.Exists(vocabPath))
+                {
+                    // 如果vocab.json不存在，使用默认语言列表
+                    AvailableLanguages = new List<string> { "zh", "ja", "en" };
+                    SelectedLanguageIndex = 0;
+                    return;
+                }
+
+                // 读取vocab.json并解析语言列表
+                using var doc = JsonDocument.Parse(File.ReadAllText(vocabPath, Encoding.UTF8));
+                var root = doc.RootElement;
+                
+                if (root.TryGetProperty("dictionaries", out var dictionaries))
+                {
+                    var languages = new List<string>();
+                    foreach (var prop in dictionaries.EnumerateObject())
+                    {
+                        languages.Add(prop.Name);
+                    }
+                    
+                    if (languages.Count > 0)
+                    {
+                        AvailableLanguages = languages;
+                        SelectedLanguageIndex = 0;
+                        return;
+                    }
+                }
+
+                // 如果没有找到dictionaries字段，使用默认语言列表
+                AvailableLanguages = new List<string> { "zh", "ja", "en" };
+                SelectedLanguageIndex = 0;
+            }
+            catch (Exception)
+            {
+                // 如果读取失败，使用默认语言列表
+                AvailableLanguages = new List<string> { "zh", "ja", "en" };
+                SelectedLanguageIndex = 0;
+            }
         }
     }
 }
