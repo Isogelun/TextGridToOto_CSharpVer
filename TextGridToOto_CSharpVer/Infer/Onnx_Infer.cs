@@ -740,16 +740,40 @@ abstract class BaseG2P
     {
         var (phSeq, wordSeq, phIdxToWordIdx) = G2P(text);
 
-        if (phSeq.Count < 2 || phSeq[0] != "SP" || phSeq[^1] != "SP")
+        if (phSeq.Count == 0)
         {
-            throw new InvalidOperationException("The first and last phonemes should be `SP`.");
+            phSeq.Add("SP");
+            phIdxToWordIdx.Add(-1);
         }
-        for (var i = 0; i < phSeq.Count - 1; i++)
+
+        if (phSeq[0] != "SP")
         {
-            if (phSeq[i] == "SP" && phSeq[i + 1] == "SP")
+            phSeq.Insert(0, "SP");
+            phIdxToWordIdx.Insert(0, -1);
+        }
+
+        if (phSeq[^1] != "SP")
+        {
+            phSeq.Add("SP");
+            phIdxToWordIdx.Add(-1);
+        }
+
+        if (phSeq.Count > 1)
+        {
+            var normalizedSeq = new List<string>(phSeq.Count);
+            var normalizedMap = new List<int>(phIdxToWordIdx.Count);
+            for (var i = 0; i < phSeq.Count; i++)
             {
-                throw new InvalidOperationException("There should not be more than two consecutive `SP`s.");
+                var ph = phSeq[i];
+                if (ph == "SP" && normalizedSeq.Count > 0 && normalizedSeq[^1] == "SP")
+                {
+                    continue;
+                }
+                normalizedSeq.Add(ph);
+                normalizedMap.Add(phIdxToWordIdx[i]);
             }
+            phSeq = normalizedSeq;
+            phIdxToWordIdx = normalizedMap;
         }
 
         if (Language is not null)
